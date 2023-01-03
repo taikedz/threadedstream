@@ -7,12 +7,9 @@ from threadedstream import ThreadedStream
 from threadedstream.NonBlockingStream import NonBlockingStream
 
 class IoStream(ThreadedStream):
-    """ Utility class that provides useful generic read and write operations backed by a ThreadedStream.
-
-    It must receive a NonBlockingStream implementation that provides read_bytes() and write_bytes()
-    methods.
+    """ Convenience class that provides useful generic read and write operations backed by a ThreadedStream.
     """
-    def __init__(self, _nonb_stream:NonBlockingStream, tick=10e9, separator=os.sep):
+    def __init__(self, tick=10e9, separator=os.sep):
         self._separator = separator
 
         ThreadedStream.__init__(self, _nonb_stream, tick)
@@ -109,6 +106,12 @@ class IoStream(ThreadedStream):
         """
         with self._in_buffer_lock:
             return len(self._in_buffer)
+
+
+    def consume_buffer(self) -> Union[str,bytes]:
+        """ Consume current buffer and return it.
+        """
+        return self.read(self.ready())
 
 
     def contains(self, target) -> bool:

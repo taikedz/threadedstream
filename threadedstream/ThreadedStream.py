@@ -7,14 +7,12 @@ from threadedstream.NonBlockingStream import NonBlockingStream
 class ThreadedStream(Thread):
     """ Class whose role is to provide thread safety on input and output buffers.
 
-    It must receive a non-blocking NonBlockingStream implementation that provides read_bytes() and write_bytes()
-    methods.
+    This class MUST be subclassed with non-blocking implementations of the
+     _raw_read and _raw_write methods for underlying actual transport streams.
 
     Instances are context-managed, for use in `with ...` blocks.
     """
-    def __init__(self, _nonb_stream_stream:NonBlockingStream, tick=10e9):
-        self.__nonb_stream = _nonb_stream_stream
-
+    def __init__(self, tick):
         # Time to wait before attempting to read again.
         # This improves performance by not obsessively consuming CPU cycles unnecessarily
         self._tick = tick
@@ -44,7 +42,7 @@ class ThreadedStream(Thread):
         self._in_buffer_updated.set()
         self._out_buffer_updated.set()
         self._stored_error = StoppedThreadError("Thread was stopped.")
-        self.__nonb_stream.close()
+        self._raw_close()
 
 
     def read(self, count=4096):
@@ -60,7 +58,7 @@ class ThreadedStream(Thread):
         with self._in_buffer_lock:
             self._in_buffer_updated.clear()
             try:
-                received = self.__nonb_stream.read()
+                received = self._raw_read()
                 self._in_buffer = self._in_buffer + received
             except Exception as e:
                 self._stored_error = e
@@ -79,7 +77,7 @@ class ThreadedStream(Thread):
     def _inner_write(self):
         with self._out_buffer_lock:
             try:
-                written = self.__nonb_stream.write(self._out_buffer)
+                written = self._raw_write(self._out_buffer)
                 self._out_buffer = self._out_buffer[written:]
             except Exception as e:
                 self._stored_error = e
@@ -92,4 +90,35 @@ class ThreadedStream(Thread):
 
 
     def __exit__(self, *e):
+        pass
+
+    # Subclasses MUST implement the following two methods.
+
+    def _raw_read(self, count:int=4096) -> Union[str,bytes]:
+        """ Subclasses MUST implement this method.
+
+        Implementation:
+
+        - must not block when reading
+        - should return at most `count` number of bytes
+        - must not call ths superclass method
+        """
+        raise NotImplementedError("Override this method. Do not call it.")
+
+
+    def _raw_write(self, data:Union[str,bytes]) -> int:
+        """ Subclasses MUST implement this method.
+
+        Implementation:
+
+        - must not block to write
+        - must return the number of bytes successfully written
+        - must not call ths superclass method
+        """
+        raise NotImplementedError("Override this method. Do not call it.")
+
+
+    def _raw_close(self):
+        """ Subclasses are recommended to implement this method, to close their underlying stream.
+        """
         pass
