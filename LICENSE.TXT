@@ -1,0 +1,3 @@
+Threaded Streams implementation
+(C) Tai Kedzierski
+Provided to you under the terms of the LGPLv3
