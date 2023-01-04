@@ -2,7 +2,6 @@ from threading import Thread, RLock, Event
 import time
 
 from threadedstream.errors import StoppedThreadError
-from threadedstream.NonBlockingStream import NonBlockingStream
 
 class ThreadedStream(Thread):
     """ Class whose role is to provide thread safety on input and output buffers.
