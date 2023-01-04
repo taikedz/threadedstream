@@ -4,7 +4,6 @@ from typing import List, Tuple, Union, Callable
 
 from threadedstream.Timer import Timer
 from threadedstream import ThreadedStream
-from threadedstream.NonBlockingStream import NonBlockingStream
 
 class IoStream(ThreadedStream):
     """ Convenience class that provides useful generic read and write operations backed by a ThreadedStream.
@@ -12,7 +11,7 @@ class IoStream(ThreadedStream):
     def __init__(self, tick=10e9, separator=os.sep):
         self._separator = separator
 
-        ThreadedStream.__init__(self, _nonb_stream, tick)
+        ThreadedStream.__init__(self, tick)
 
 
     def read_until(self, target, timeout:float=None) -> Tuple(str, Exception):
