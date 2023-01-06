@@ -17,7 +17,7 @@ class TcpStream(IoStream):
         new_data = None
 
         try:
-            new_data = self.__io_stream.recv(size)
+            new_data = self.__io_stream.recv(count)
 
         except socket.error as e:
             # The read operation will raise an error if nothing is available

@@ -44,15 +44,24 @@ class Timer:
         """
         if self.__start != None:
             self.__dt = (datetime.now() - self.__start).total_seconds()
-            if timeout != None and dt >= timeout:
+            if self.__timeout != None and self.__dt >= self.__timeout:
                 raise TimeoutError(f"{self.__name} timed out beyond {self.__timeout}s (at {self.__dt}s)")
         return self.__dt
 
 
-    def __enter__(self):
+    def start_timer(self):
         self.__start = datetime.now()
+
+
+    def stop_timer(self):
+        self.__start = None
+
+
+    def __enter__(self):
+        self.start_timer()
         return self
 
 
     def __exit__(self, *e):
-        self.__start = None
+        self.stop_timer()
+    

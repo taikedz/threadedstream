@@ -3,83 +3,105 @@ from datetime import datetime
 from typing import List, Tuple, Union, Callable
 
 from threadedstream.Timer import Timer
-from threadedstream import ThreadedStream
+from threadedstream.ThreadedStream import ThreadedStream
+from threadedstream.errors import re_raise_with
+
 
 class IoStream(ThreadedStream):
     """ Convenience class that provides useful generic read and write operations backed by a ThreadedStream.
     """
-    def __init__(self, tick=10e9, separator=os.sep):
+    def __init__(self, tick=10e6, separator=os.linesep):
         self._separator = separator
 
         ThreadedStream.__init__(self, tick)
 
 
-    def read_until(self, target, timeout:float=None) -> Tuple(str, Exception):
+    def read_until(self, target, timeout:float=None) -> Tuple[str, Exception]:
         """ Read data until a target piece of data is encountered.
 
         This method blocks the calling thread until the target has been encountered.
 
-        Returns a tuple of obtained data until and including the target, and any potential error.
-        If the section times out, the error will be a throwable instance. Otherwise, it is None.
+        Any errors raised will have an additional special property `error_payload` containing
+         the data accumulated by the time of the error. 
         """
 
         data = None
 
         def _update_local_buffer(new_data):
+            nonlocal data
             data = new_data if data == None else data + new_data
 
         with Timer(timeout, f"read_until({repr(target)})") as t:
             while True:
                 try:
                     t.check_timer()
-                except TimeoutError as e:
-                    return data, e
 
-                # We check only after the buffer has had a chance to update.
-                self._in_buffer_updated.wait()
+                    # We check only after the buffer has had a chance to update.
+                    self._in_buffer_updated.wait()
 
-                with self._in_buffer_lock:
-                    # We acquire the lock overall, so that other threads
-                    #  cannot modify the buffer between our check and our consumption
-                    if self.contains(target):
-                        idx = self.index(target)
-                        _update_local_buffer(self.read(idx + len(target)) )
-                        return data, None
+                    with self._in_buffer_lock:
+                        # We acquire the lock overall, so that other threads
+                        #  cannot modify the buffer between our check and our consumption
+                        if self.contains(target):
+                            idx = self.index(target)
+                            _update_local_buffer(self.read(idx + len(target)) )
+                            return data
 
-                    # This thread is no longer alive. Get any remaining data.
-                    elif self._alive != True:
-                        _update_local_buffer( self.read(self.ready()) )
-                        return data, EOFError(f"Reached end of stream before finding {repr(target)}")
+                        # This thread is no longer alive. Get any remaining data, and raise.
+                        elif self._alive != True:
+                            _update_local_buffer( self.read(self.ready()) )
+                            raise EOFError(f"Reached end of stream before finding {repr(target)}")
 
-                    else:
-                        # If the target is longer than the available bytes, read zero bytes instead
-                        max_data = max(0,  self.ready() - len(target))
-                        _update_local_buffer(self.read())
+                        else:
+                            # If the target is longer than the available bytes, read zero bytes instead
+                            max_data = max(0,  self.ready() - len(target))
+                            _update_local_buffer(self.read())
+
+                except Exception as e:
+                    re_raise_with(data, e)
 
 
     def read_line(self, timeout:float=None) -> Union[str,bytes]:
         """ Read a line of data from the stream.
 
         This method blocks the calling thread until a line is ready to be read.
+
+        Any errors raised will have an additional special property `error_payload` containing
+         the data accumulated by the time of the error. 
         """
-        line, err = self.read_until(self._separator, timeout)
-        if err:
-            raise err
-        return line
+        return self.read_until(self._separator, timeout)
 
 
-    def read_lines(self, max_lines:int, skip:Callable=None, timeout:float=None) -> List[Union[str,bytes]]:
+    def read_lines(self, max_lines:int, skip:Callable=None, timeout:float=None, line_timeout:float=0.1) -> List[Union[str,bytes]]:
         """ Read max_lines number of lines, and return them.
+
+        Must always have a maximumm number of lines, as stremas are presumed infinite. If you indeed expect
+         to read all lines of the stream until EOF, set max_lines=0
 
         If `skip(L)` handler is provided, uses the skip function to determine
         whether to skip the line. Skipped lines do not count towards the max line count.
+
+        Any errors raised will have an additional special property `error_payload` containing
+         the data accumulated by the time of the error. 
+
+        max_lines: read this many lines before returning
+        timeout : max time to allow for reading all lines
+        line_timeout: max time to allow for reading any single line
         """
         lines = []
-        while len(lines) < max_lines:
-            L = self.read_line()
-            if skip_empty and skip(L): continue
-            lines.append(L)
-        return lines
+        try:
+            with Timer(timeout, f"read_lines({max_lines})") as t:
+                while len(lines) < max_lines or max_lines == 0:
+                    t.check_timer()
+                    L = self.read_line(line_timeout)
+                    if skip != None and skip(L): continue
+                    lines.append(L)
+                return lines
+
+        except Exception as e:
+            if hasattr(e, "error_payload"):
+                lines.append(e.error_payload)
+            re_raise_with(lines, e)
 
 
     # Direct extensions to the ThreadedStream functionality
