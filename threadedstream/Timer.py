@@ -50,10 +50,16 @@ class Timer:
 
 
     def start_timer(self):
+        """ (Re-)Start the timer from zero.
+        """
         self.__start = datetime.now()
 
 
     def stop_timer(self):
+        """ Stop the timer.
+
+        The last duration measured is retained after the timer is stopped.
+        """
         self.__start = None
 
 

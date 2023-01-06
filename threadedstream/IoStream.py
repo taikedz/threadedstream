@@ -78,7 +78,7 @@ class IoStream(ThreadedStream):
         return self.read_until(self._separator, timeout)
 
 
-    def read_lines(self, max_lines:int, skip:Callable=None, timeout:float=None, line_timeout:float=0.1) -> List[Union[str,bytes]]:
+    def read_lines(self, max_lines:int, skip:Callable=None, until:Callable=None, timeout:float=None, line_timeout:float=0.1) -> List[Union[str,bytes]]:
         """ Read max_lines number of lines, and return them.
 
         Must always have a maximumm number of lines, as stremas are presumed infinite. If you indeed expect
@@ -91,6 +91,8 @@ class IoStream(ThreadedStream):
          the data accumulated by the time of the error. 
 
         max_lines: read this many lines before returning
+        skip: function to test whether to skip the line. takes 1 parameter, a line.
+        until: function to test whether the line is the last line to read, and thus return accumulated lines.
         timeout : max time to allow for reading all lines
         line_timeout: max time to allow for reading any single line
         """
@@ -102,6 +104,7 @@ class IoStream(ThreadedStream):
                     L = self.read_line(line_timeout)
                     if skip != None and skip(L): continue
                     lines.append(L)
+                    if until != None and until(L): break
                 return lines
 
         except Exception as e:
@@ -121,7 +124,7 @@ class IoStream(ThreadedStream):
     # Direct extensions to the ThreadedStream functionality
 
     def index(self, target):
-        """ Look for the target in the incoming buffer, and return its index.
+        """ Look for the target in the read buffer, and return its index.
 
         Raises: ValueError - if target was not found
         """
@@ -130,21 +133,21 @@ class IoStream(ThreadedStream):
 
 
     def peek(self, count=32):
-        """Look ahead without conuming bytes. Returns the first (count) bytes in the read buffer.
+        """Look ahead in read buffer without consuming bytes. Returns the first (count) bytes in the read buffer.
         """
         with self._in_buffer_lock:
             return self._in_buffer[:count]
 
 
     def ready(self) -> int:
-        """ Return the number of bytes currently in the incoming buffer
+        """ Return the number of bytes currently in the read buffer
         """
         with self._in_buffer_lock:
             return len(self._in_buffer)
 
 
     def consume_buffer(self) -> Union[str,bytes]:
-        """ Consume current buffer and return it.
+        """ Consume current read buffer and return it.
         """
         return self.read(self.ready())
 
@@ -160,14 +163,12 @@ class IoStream(ThreadedStream):
 
 
     def check(self, check_operation) -> bool:
-        """ Potentially expensive operation to apply a check
-        function, which areceives a _copy_ of the data currently
-        in the incoming bufffer.
+        """ Apply a check function to the read buffer.
 
-        Expense is equal to the amount of data in the incoming buffer that needs copied.
+        Check function receives one parameter, the content of the read buffer.
         """
         with self._in_buffer_lock:
-            return bool(check_operation(self._in_buffer[:]))
+            return bool(check_operation(self._in_buffer))
 
 
     def waiting(self) -> int:
