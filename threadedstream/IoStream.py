@@ -4,7 +4,7 @@ from typing import List, Tuple, Union, Callable
 
 from threadedstream.Timer import Timer
 from threadedstream.ThreadedStream import ThreadedStream
-from threadedstream.errors import re_raise_with
+from threadedstream.errors import re_raise_with, set_payload
 
 
 class IoStream(ThreadedStream):
@@ -58,7 +58,13 @@ class IoStream(ThreadedStream):
                             _update_local_buffer(self.read())
 
                 except Exception as e:
-                    re_raise_with(data, e)
+                    if hasattr(e, "error_payload"):
+                        if isinstance(e.error_payload, tuple):
+                            # A lower-level ThreadedStream error occurred
+                            # It already contains its own payload. Restore our data to it
+                            set_payload((data+e.error_payload[0], e.error_payload[1]))
+                            raise
+                    re_raise_with((data+self._in_buffer, self._out_buffer), e)
 
 
     def read_line(self, timeout:float=None) -> Union[str,bytes]:
@@ -100,8 +106,16 @@ class IoStream(ThreadedStream):
 
         except Exception as e:
             if hasattr(e, "error_payload"):
-                lines.append(e.error_payload)
-            re_raise_with(lines, e)
+                if isinstance(e.error_payload, tuple):
+                    # A lower-level ThreadedStream error occurred
+                    # It already contains its own payload. Restore our data to it
+                    set_payload((data+e.error_payload[0], e.error_payload[1]))
+                    raise
+                else:
+                    # Error payload single line before it was tracked
+                    lines.append(e.error_payload)
+            data = self._separator.join(lines)
+            re_raise_with((data+self._in_buffer, self._out_buffer), e)
 
 
     # Direct extensions to the ThreadedStream functionality
