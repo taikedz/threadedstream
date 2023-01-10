@@ -12,6 +12,7 @@ During reading of data, it is possible for any mishap to occur, resulting in a r
 
 This library therefore implements the idea of an `error_payload` to allow recently acquired data to still be accessed, even when an exception is raised: any error raised by `ThreadedStream` is expected to carry a `error_payload` attribute on the exception instance matching a tuple of the input and output buffers at time of error.
 
+[Write up an discussion on dev.to](https://dev.to/taikedz/an-exercise-in-multi-threading-and-lessons-learned-461m)
 
 ## Example
 
