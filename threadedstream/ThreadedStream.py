@@ -47,6 +47,10 @@ class ThreadedStream(Thread):
 
     def _raw_close(self):
         """ Subclasses are recommended to implement this method, to close their underlying stream.
+
+        Implementation:
+
+        - must not raise an error on repeated calls to close
         """
         pass
 
@@ -70,6 +74,10 @@ class ThreadedStream(Thread):
 
         self._alive = True
         self._stored_error = None
+
+
+    def __del__(self):
+        self.stop()
 
 
     def __enter__(self):
